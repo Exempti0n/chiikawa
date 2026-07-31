@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#79a95a">
+<title>바람의 유적 — 오픈월드 모험</title>
+<style>
+  *{box-sizing:border-box;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#111;font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo",sans-serif}
+  canvas{display:block;width:100%;height:100%;touch-action:none;background:#8fc56c}
+  #hud{position:fixed;inset:0;pointer-events:none;color:#fff;text-shadow:0 2px 3px #000}
+  #top{position:absolute;left:14px;top:max(12px,env(safe-area-inset-top));display:flex;gap:12px;align-items:center}
+  .pill{background:rgba(20,25,20,.58);backdrop-filter:blur(5px);border:1px solid rgba(255,255,255,.25);border-radius:16px;padding:7px 11px;font-size:14px}
+  #quest{position:absolute;right:12px;top:max(12px,env(safe-area-inset-top));width:min(46vw,250px);background:rgba(20,25,20,.6);border:1px solid rgba(255,255,255,.24);border-radius:14px;padding:10px;font-size:13px;line-height:1.35}
+  #message{position:absolute;left:50%;top:22%;transform:translateX(-50%);background:rgba(0,0,0,.62);border-radius:14px;padding:10px 16px;font-size:15px;opacity:0;transition:opacity .2s;white-space:nowrap}
+  #interact{position:absolute;left:50%;bottom:128px;transform:translateX(-50%);background:rgba(0,0,0,.62);border:1px solid #fff7;border-radius:18px;padding:8px 14px;font-size:14px;display:none}
+  #controls{position:fixed;inset:0;pointer-events:none}
+  #stickBase{position:absolute;left:24px;bottom:max(28px,env(safe-area-inset-bottom));width:112px;height:112px;border-radius:50%;background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.34);pointer-events:auto;touch-action:none}
+  #stick{position:absolute;left:33px;top:33px;width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 3px 10px #0005}
+  .btn{position:absolute;width:62px;height:62px;border-radius:50%;border:2px solid rgba(255,255,255,.38);background:rgba(30,35,30,.45);color:white;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;text-shadow:0 1px 2px #000}
+  #attack{right:24px;bottom:max(30px,env(safe-area-inset-bottom))}
+  #action{right:98px;bottom:max(86px,calc(env(safe-area-inset-bottom) + 56px))}
+  #dash{right:106px;bottom:max(14px,env(safe-area-inset-bottom));width:52px;height:52px;font-size:12px}
+  #mapBtn{right:16px;top:92px;width:48px;height:48px;font-size:12px}
+  #start{position:fixed;inset:0;background:linear-gradient(#79b6d8 0 45%,#6e9e4b 45%);display:flex;align-items:center;justify-content:center;color:#fff;z-index:5}
+  #panel{width:min(88vw,420px);background:rgba(15,22,15,.7);border:1px solid #fff5;border-radius:22px;padding:24px;text-align:center;box-shadow:0 20px 60px #0007}
+  h1{margin:0 0 8px;font-size:34px} p{line-height:1.5}
+  #start button{border:0;border-radius:18px;padding:13px 26px;font-size:18px;font-weight:800;background:#f1d874;color:#26341c}
+  #map{position:fixed;inset:0;background:rgba(5,10,5,.88);display:none;z-index:4;color:#fff;padding:calc(env(safe-area-inset-top) + 18px) 18px 18px}
+  #mapCanvas{width:100%;height:82%;border:1px solid #fff5;border-radius:14px;background:#9abf73}
+  #closeMap{position:absolute;right:20px;bottom:calc(env(safe-area-inset-bottom) + 15px);border:0;border-radius:14px;padding:10px 20px;font-size:16px}
+  #gameover{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.72);z-index:6;color:#fff;text-align:center}
+  #gameover button{padding:12px 20px;border:0;border-radius:14px;font-size:17px}
+</style>
+</head>
+<body>
+<div id="start">
+  <div id="panel">
+    <div style="font-size:55px">🗡️🌿</div>
+    <h1>바람의 유적</h1>
+    <p>넓은 들판을 탐험하고, 몬스터를 쓰러뜨리고, 세 개의 고대 유적을 깨워 하늘섬의 문을 여세요.</p>
+    <p style="font-size:13px;opacity:.86">왼쪽 스틱 이동 · 공격 · 행동/글라이딩 · 대시</p>
+    <button id="startBtn">모험 시작</button>
+  </div>
+</div>
+
+<canvas id="game"></canvas>
+<div id="hud">
+  <div id="top">
+    <div class="pill" id="hearts">❤❤❤❤❤</div>
+    <div class="pill">루피 <b id="rupees">0</b></div>
+    <div class="pill">유적 <b id="shrines">0</b>/3</div>
+  </div>
+  <div id="quest"><b>메인 퀘스트</b><br><span id="questText">고대 유적 3곳을 찾아 봉인을 해제하세요.</span></div>
+  <div id="message"></div>
+  <div id="interact"></div>
+</div>
+
+<div id="controls">
+  <div id="stickBase"><div id="stick"></div></div>
+  <div class="btn" id="attack">공격</div>
+  <div class="btn" id="action">행동</div>
+  <div class="btn" id="dash">대시</div>
+  <div class="btn" id="mapBtn">지도</div>
+</div>
+
+<div id="map">
+  <canvas id="mapCanvas"></canvas>
+  <button id="closeMap">닫기</button>
+</div>
+
+<div id="gameover">
+  <div>
+    <h1 id="overTitle">모험 종료</h1>
+    <p id="overText"></p>
+    <button onclick="location.reload()">다시 시작</button>
+  </div>
+</div>
+
+<script>
+(() => {
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(devicePixelRatio || 1, 2);
+let W=innerWidth,H=innerHeight;
+function resize(){
+  W=innerWidth; H=innerHeight;
+  canvas.width=W*DPR; canvas.height=H*DPR;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',resize); resize();
+
+const world={w:2800,h:2200};
+const player={x:340,y:430,r:16,speed:2.8,hp:5,maxHp:5,dir:0,attack:0,inv:0,stamina:100,rupees:0,shrines:0,gliding:false};
+const camera={x:0,y:0};
+const keys={};
+let joy={x:0,y:0}, running=false, dash=false, actionPressed=false;
+let msgTimer=0;
+
+const trees=[], rocks=[], grass=[], enemies=[], gems=[], shrines=[], chests=[], cliffs=[], water=[];
+function rand(a,b){return a+Math.random()*(b-a)}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y)}
+for(let i=0;i<160;i++) trees.push({x:rand(80,world.w-80),y:rand(80,world.h-80),r:rand(18,28)});
+for(let i=0;i<110;i++) rocks.push({x:rand(80,world.w-80),y:rand(80,world.h-80),r:rand(7,19)});
+for(let i=0;i<240;i++) grass.push({x:rand(0,world.w),y:rand(0,world.h),s:rand(3,8)});
+for(let i=0;i<22;i++) enemies.push({x:rand(500,world.w-100),y:rand(300,world.h-100),r:17,hp:3,dead:false,hit:0,angle:rand(0,6.28),type:Math.random()<.25?'guardian':'slime'});
+for(let i=0;i<30;i++) gems.push({x:rand(150,world.w-100),y:rand(150,world.h-100),got:false});
+shrines.push({x:650,y:390,active:false},{x:2180,y:520,active:false},{x:1840,y:1770,active:false});
+chests.push({x:1040,y:880,open:false},{x:2440,y:1500,open:false},{x:500,y:1780,open:false});
+cliffs.push({x:1150,y:250,w:360,h:320},{x:1460,y:1040,w:420,h:350},{x:330,y:1300,w:370,h:300});
+water.push({x:760,y:1370,w:480,h:300},{x:2150,y:850,w:390,h:340});
+
+function showMessage(t){
+  const el=document.getElementById('message');
+  el.textContent=t; el.style.opacity=1; msgTimer=150;
+}
+function updateHUD(){
+  document.getElementById('hearts').textContent='❤'.repeat(Math.max(0,player.hp))+'♡'.repeat(player.maxHp-player.hp);
+  document.getElementById('rupees').textContent=player.rupees;
+  document.getElementById('shrines').textContent=player.shrines;
+  if(player.shrines===3) document.getElementById('questText').textContent='북동쪽 하늘섬의 문으로 향하세요.';
+}
+function rectContains(r,x,y){return x>r.x&&x<r.x+r.w&&y>r.y&&y<r.y+r.h}
+function blocked(nx,ny){
+  for(const r of water) if(rectContains(r,nx,ny)) return true;
+  for(const c of cliffs) if(rectContains(c,nx,ny) && !player.gliding) return true;
+  return nx<20||ny<20||nx>world.w-20||ny>world.h-20;
+}
+function attack(){
+  if(player.attack>0)return;
+  player.attack=18;
+  for(const e of enemies){
+    if(e.dead)continue;
+    const d=dist(player,e);
+    let a=Math.atan2(e.y-player.y,e.x-player.x);
+    let diff=Math.atan2(Math.sin(a-player.dir),Math.cos(a-player.dir));
+    if(d<75&&Math.abs(diff)<1.05){ e.hp--; e.hit=10; if(e.hp<=0){e.dead=true;player.rupees+=e.type==='guardian'?12:5;showMessage('몬스터를 쓰러뜨렸습니다!');updateHUD();}}
+  }
+}
+function interact(){
+  for(const s of shrines){
+    if(!s.active&&dist(player,s)<70){
+      s.active=true;player.shrines++;player.hp=Math.min(player.maxHp,player.hp+1);
+      showMessage('고대 유적의 봉인이 해제되었습니다.');updateHUD();return;
+    }
+  }
+  for(const c of chests){
+    if(!c.open&&dist(player,c)<55){c.open=true;player.rupees+=25;showMessage('보물상자에서 25루피를 얻었습니다!');updateHUD();return;}
+  }
+  if(player.shrines===3 && player.x>2550 && player.y<260){
+    running=false;
+    document.getElementById('gameover').style.display='flex';
+    document.getElementById('overTitle').textContent='하늘섬의 문이 열렸습니다!';
+    document.getElementById('overText').textContent='모험 완료 · 획득 루피 '+player.rupees;
+  }
+}
+function update(){
+  if(!running)return;
+  let mx=joy.x+(keys.ArrowRight||keys.d?1:0)-(keys.ArrowLeft||keys.a?1:0);
+  let my=joy.y+(keys.ArrowDown||keys.s?1:0)-(keys.ArrowUp||keys.w?1:0);
+  let len=Math.hypot(mx,my); if(len>1){mx/=len;my/=len}
+  if(len>.08) player.dir=Math.atan2(my,mx);
+  let sp=player.speed*(dash&&player.stamina>0?1.75:1);
+  if(dash&&len>.08&&player.stamina>0)player.stamina=Math.max(0,player.stamina-.55);
+  else player.stamina=Math.min(100,player.stamina+.32);
+  player.gliding=actionPressed && player.stamina>0 && cliffs.some(c=>rectContains(c,player.x,player.y));
+  if(player.gliding)player.stamina=Math.max(0,player.stamina-.35);
+  const nx=player.x+mx*sp,ny=player.y+my*sp;
+  if(!blocked(nx,player.y))player.x=nx;
+  if(!blocked(player.x,ny))player.y=ny;
+  if(player.attack>0)player.attack--;
+  if(player.inv>0)player.inv--;
+
+  for(const g of gems){
+    if(!g.got&&dist(player,g)<25){g.got=true;player.rupees++;updateHUD();}
+  }
+  for(const e of enemies){
+    if(e.dead)continue;
+    e.hit=Math.max(0,e.hit-1);
+    const d=dist(player,e);
+    if(d<280){
+      const a=Math.atan2(player.y-e.y,player.x-e.x);
+      e.x+=Math.cos(a)*(e.type==='guardian'?1.15:.72);
+      e.y+=Math.sin(a)*(e.type==='guardian'?1.15:.72);
+    }else{
+      e.angle+=rand(-.03,.03);
+      e.x+=Math.cos(e.angle)*.25;e.y+=Math.sin(e.angle)*.25;
+    }
+    if(d<30&&player.inv===0){
+      player.hp--;player.inv=70;showMessage('공격받았습니다!');
+      player.x-=Math.cos(Math.atan2(e.y-player.y,e.x-player.x))*35;
+      player.y-=Math.sin(Math.atan2(e.y-player.y,e.x-player.x))*35;
+      updateHUD();
+      if(player.hp<=0){
+        running=false;document.getElementById('gameover').style.display='flex';
+        document.getElementById('overTitle').textContent='쓰러졌습니다';
+        document.getElementById('overText').textContent='유적 '+player.shrines+'/3 · 루피 '+player.rupees;
+      }
+    }
+  }
+  camera.x+=(player.x-W/2-camera.x)*.11;
+  camera.y+=(player.y-H/2-camera.y)*.11;
+  camera.x=Math.max(0,Math.min(world.w-W,camera.x));
+  camera.y=Math.max(0,Math.min(world.h-H,camera.y));
+
+  let near='';
+  for(const s of shrines)if(!s.active&&dist(player,s)<80)near='행동 버튼: 유적 활성화';
+  for(const c of chests)if(!c.open&&dist(player,c)<65)near='행동 버튼: 보물상자 열기';
+  if(player.shrines===3&&player.x>2470&&player.y<340)near='행동 버튼: 하늘섬의 문 열기';
+  const ie=document.getElementById('interact');ie.textContent=near;ie.style.display=near?'block':'none';
+  if(msgTimer>0){msgTimer--;if(msgTimer===0)document.getElementById('message').style.opacity=0}
+}
+
+function drawGround(){
+  ctx.fillStyle='#8fc56c';ctx.fillRect(0,0,W,H);
+  ctx.save();ctx.translate(-camera.x,-camera.y);
+  ctx.fillStyle='#7aae58';
+  for(let x=0;x<world.w;x+=160)for(let y=0;y<world.h;y+=160){
+    if((x/160+y/160)%2===0)ctx.fillRect(x,y,160,160);
+  }
+  for(const w of water){
+    ctx.fillStyle='#4f9eb8';ctx.fillRect(w.x,w.y,w.w,w.h);
+    ctx.strokeStyle='#9fd4df';ctx.lineWidth=2;
+    for(let y=w.y+18;y<w.y+w.h;y+=28){ctx.beginPath();ctx.moveTo(w.x+8,y);ctx.lineTo(w.x+w.w-8,y);ctx.stroke();}
+  }
+  for(const c of cliffs){
+    ctx.fillStyle='#85765d';ctx.fillRect(c.x,c.y,c.w,c.h);
+    ctx.fillStyle='#a89777';ctx.fillRect(c.x+8,c.y+8,c.w-16,c.h-28);
+    ctx.strokeStyle='#6a5b47';ctx.lineWidth=3;
+    for(let y=c.y+40;y<c.y+c.h;y+=48){ctx.beginPath();ctx.moveTo(c.x+10,y);ctx.lineTo(c.x+c.w-10,y+10);ctx.stroke();}
+  }
+  for(const g of grass){ctx.strokeStyle='#5e8a42';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(g.x,g.y);ctx.lineTo(g.x-3,g.y-g.s);ctx.moveTo(g.x,g.y);ctx.lineTo(g.x+3,g.y-g.s);ctx.stroke();}
+  ctx.restore();
+}
+function drawObjects(){
+  ctx.save();ctx.translate(-camera.x,-camera.y);
+  for(const t of trees){
+    ctx.fillStyle='#5a3c25';ctx.fillRect(t.x-5,t.y,10,t.r+10);
+    ctx.fillStyle='#356f35';ctx.beginPath();ctx.arc(t.x,t.y,t.r,0,7);ctx.fill();
+    ctx.fillStyle='#4f8b43';ctx.beginPath();ctx.arc(t.x-8,t.y-7,t.r*.65,0,7);ctx.fill();
+  }
+  for(const r of rocks){ctx.fillStyle='#77756e';ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,7);ctx.fill();ctx.fillStyle='#aaa79d';ctx.beginPath();ctx.arc(r.x-4,r.y-5,r.r*.42,0,7);ctx.fill();}
+  for(const g of gems)if(!g.got){ctx.fillStyle='#47e6cb';ctx.beginPath();ctx.moveTo(g.x,g.y-9);ctx.lineTo(g.x+7,g.y);ctx.lineTo(g.x,g.y+9);ctx.lineTo(g.x-7,g.y);ctx.closePath();ctx.fill();}
+  for(const c of chests){
+    ctx.fillStyle=c.open?'#5c4430':'#8d5d27';ctx.fillRect(c.x-19,c.y-13,38,26);
+    ctx.fillStyle='#d6b04e';ctx.fillRect(c.x-3,c.y-6,6,12);
+    if(c.open){ctx.save();ctx.translate(c.x-18,c.y-13);ctx.rotate(-.7);ctx.fillStyle='#8d5d27';ctx.fillRect(0,-8,38,10);ctx.restore();}
+  }
+  for(const s of shrines){
+    ctx.save();ctx.translate(s.x,s.y);
+    ctx.fillStyle=s.active?'#48e8d0':'#8d826f';ctx.beginPath();ctx.moveTo(0,-42);ctx.lineTo(31,25);ctx.lineTo(-31,25);ctx.closePath();ctx.fill();
+    ctx.strokeStyle=s.active?'#d8fff9':'#554f44';ctx.lineWidth=4;ctx.beginPath();ctx.arc(0,3,13,0,7);ctx.stroke();
+    if(s.active){ctx.globalAlpha=.25;ctx.fillStyle='#64ffe5';ctx.beginPath();ctx.arc(0,0,62,0,7);ctx.fill();}
+    ctx.restore();
+  }
+  // final gate
+  ctx.fillStyle=player.shrines===3?'#50e8d2':'#5d5d63';
+  ctx.fillRect(2600,80,22,120);ctx.fillRect(2700,80,22,120);ctx.fillRect(2600,78,122,20);
+  for(const e of enemies){
+    if(e.dead)continue;
+    ctx.save();ctx.translate(e.x,e.y);
+    if(e.hit)ctx.globalAlpha=.5;
+    if(e.type==='guardian'){
+      ctx.fillStyle='#5e6468';ctx.beginPath();ctx.arc(0,0,19,0,7);ctx.fill();
+      ctx.strokeStyle='#34383b';ctx.lineWidth=5;
+      for(let i=0;i<6;i++){let a=i*Math.PI/3;ctx.beginPath();ctx.moveTo(Math.cos(a)*12,Math.sin(a)*12);ctx.lineTo(Math.cos(a)*31,Math.sin(a)*31);ctx.stroke();}
+      ctx.fillStyle='#e44';ctx.beginPath();ctx.arc(4,-2,5,0,7);ctx.fill();
+    }else{
+      ctx.fillStyle='#8c4cb8';ctx.beginPath();ctx.arc(0,3,18,0,7);ctx.fill();
+      ctx.beginPath();ctx.moveTo(-13,-8);ctx.lineTo(-6,-23);ctx.lineTo(0,-9);ctx.closePath();ctx.fill();
+      ctx.beginPath();ctx.moveTo(5,-9);ctx.lineTo(14,-22);ctx.lineTo(14,-5);ctx.closePath();ctx.fill();
+      ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(-6,1,3,0,7);ctx.arc(6,1,3,0,7);ctx.fill();
+    }
+    ctx.restore();
+  }
+  // player
+  ctx.save();ctx.translate(player.x,player.y);ctx.rotate(player.dir);
+  if(player.inv%10<5){
+    ctx.fillStyle=player.gliding?'#d8b46a':'#e4d1a3';ctx.beginPath();ctx.arc(0,0,player.r,0,7);ctx.fill();
+    ctx.fillStyle='#5a8c4c';ctx.beginPath();ctx.moveTo(-11,-13);ctx.lineTo(-22,-3);ctx.lineTo(-7,-4);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#3b6d8c';ctx.fillRect(-8,8,16,14);
+    ctx.fillStyle='#333';ctx.beginPath();ctx.arc(7,-4,2.3,0,7);ctx.fill();
+    if(player.attack>0){ctx.strokeStyle='#f5f1ce';ctx.lineWidth=5;ctx.beginPath();ctx.arc(5,0,45,-1.1,1.1);ctx.stroke();}
+    else{ctx.strokeStyle='#ddd';ctx.lineWidth=4;ctx.beginPath();ctx.moveTo(12,5);ctx.lineTo(30,0);ctx.stroke();}
+    if(player.gliding){ctx.fillStyle='#9b6b38';ctx.beginPath();ctx.moveTo(-32,-32);ctx.lineTo(5,-45);ctx.lineTo(34,-27);ctx.lineTo(0,-17);ctx.closePath();ctx.fill();}
+  }
+  ctx.restore();
+  ctx.restore();
+}
+function drawHUDCanvas(){
+  const x=18,y=H-154,w=112;
+  ctx.fillStyle='rgba(0,0,0,.35)';ctx.fillRect(x,y,w,8);
+  ctx.fillStyle='#e8d968';ctx.fillRect(x,y,w*(player.stamina/100),8);
+}
+function render(){drawGround();drawObjects();drawHUDCanvas();requestAnimationFrame(render)}
+setInterval(update,1000/60);render();
+
+document.addEventListener('keydown',e=>{keys[e.key]=true;if(e.key===' ')attack();if(e.key==='e')interact()});
+document.addEventListener('keyup',e=>keys[e.key]=false);
+
+const base=document.getElementById('stickBase'), knob=document.getElementById('stick');
+let stickId=null;
+function moveStick(e){
+  const r=base.getBoundingClientRect(),t=[...e.touches].find(t=>t.identifier===stickId);if(!t)return;
+  let dx=t.clientX-(r.left+r.width/2),dy=t.clientY-(r.top+r.height/2),d=Math.hypot(dx,dy),m=42;
+  if(d>m){dx=dx/d*m;dy=dy/d*m}
+  joy.x=dx/m;joy.y=dy/m;knob.style.transform=`translate(${dx}px,${dy}px)`;
+}
+base.addEventListener('touchstart',e=>{stickId=e.changedTouches[0].identifier;moveStick(e)},{passive:false});
+base.addEventListener('touchmove',e=>{e.preventDefault();moveStick(e)},{passive:false});
+base.addEventListener('touchend',e=>{if([...e.changedTouches].some(t=>t.identifier===stickId)){stickId=null;joy.x=joy.y=0;knob.style.transform=''}},{passive:false});
+function bindHold(id,on,off){
+ const el=document.getElementById(id);
+ el.addEventListener('touchstart',e=>{e.preventDefault();on();},{passive:false});
+ el.addEventListener('touchend',e=>{e.preventDefault();off&&off();},{passive:false});
+ el.addEventListener('mousedown',on);el.addEventListener('mouseup',()=>off&&off());
+}
+bindHold('attack',attack);
+bindHold('dash',()=>dash=true,()=>dash=false);
+bindHold('action',()=>{actionPressed=true;interact()},()=>actionPressed=false);
+
+document.getElementById('startBtn').onclick=()=>{document.getElementById('start').style.display='none';running=true;showMessage('바람이 부는 방향으로 유적을 찾아보세요.');};
+const map=document.getElementById('map'),mc=document.getElementById('mapCanvas'),mctx=mc.getContext('2d');
+function drawMap(){
+ const r=mc.getBoundingClientRect();mc.width=r.width*DPR;mc.height=r.height*DPR;mctx.setTransform(DPR,0,0,DPR,0,0);
+ const sx=r.width/world.w,sy=r.height/world.h;
+ mctx.fillStyle='#9abf73';mctx.fillRect(0,0,r.width,r.height);
+ mctx.fillStyle='#4f9eb8';for(const w of water)mctx.fillRect(w.x*sx,w.y*sy,w.w*sx,w.h*sy);
+ mctx.fillStyle='#7c6d58';for(const c of cliffs)mctx.fillRect(c.x*sx,c.y*sy,c.w*sx,c.h*sy);
+ for(const s of shrines){mctx.fillStyle=s.active?'#35efd4':'#eee';mctx.beginPath();mctx.arc(s.x*sx,s.y*sy,7,0,7);mctx.fill();}
+ mctx.fillStyle='#ffe66d';mctx.beginPath();mctx.arc(player.x*sx,player.y*sy,6,0,7);mctx.fill();
+ mctx.fillStyle='#4cf0db';mctx.fillRect(2600*sx,80*sy,120*sx,120*sy);
+}
+document.getElementById('mapBtn').onclick=()=>{map.style.display='block';drawMap();};
+document.getElementById('closeMap').onclick=()=>map.style.display='none';
+updateHUD();
+})();
+</script>
+</body>
+</html>
